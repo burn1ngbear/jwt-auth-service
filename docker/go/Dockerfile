@@ -1,9 +1,22 @@
-FROM golang:1.21.6-alpine
+FROM golang:1.21-alpine
 
 WORKDIR /app
 
-COPY ./src/app ./src/app
+# Установка зависимостей
+RUN apk add --no-cache git
 
-RUN go mod tidy
+# Копируем файлы модулей и загружаем зависимости
+COPY go.mod go.sum ./
+RUN go mod download
 
-CMD ["go", "run", "./src/app/main.go"]
+# Копируем исходный код
+COPY . .
+
+# Собираем приложение
+RUN go build -o main .
+
+# Экспортируем порт
+EXPOSE 8080
+
+# Запускаем приложение
+CMD ["./main"]

@@ -107,9 +107,7 @@ func refreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 	// Генерация новых токенов
 	claims := token.Claims.(jwt.MapClaims)
 	user := User{
-		ID:    int(claims["user_id"].(float64)),
-		Email: string(claims["email"].(string)),
-		Name:  string(claims["name"].(string)),
+		ID: int(claims["user_id"].(float64)),
 	}
 	accessToken, newRefreshToken, err := generateTokens(user)
 	if err != nil {

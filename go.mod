@@ -1,4 +1,4 @@
-module sso
+module github.com/burn1ngbear/jwt-auth-service
 
 go 1.25.0
 

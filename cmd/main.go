@@ -11,39 +11,60 @@ import (
 )
 
 var (
-	jwtSecret = []byte("your-secret-key") // В продакшене используйте безопасное хранилище секретов
+	jwtSecret = []byte("your-secret-key")
 )
-
-// Claims структура для хранения данных в JWT
-type Claims struct {
-	Username string `json:"username"`
-	jwt.RegisteredClaims
-}
 
 // User структура для представления пользователя
 type User struct {
+	ID       int    `json:"id"`
 	Username string `json:"username"`
-	Password string `json:"password"` // В реальном приложении храните хеш пароля
+	Password string `json:"password"`
+	Email    string `json:"email"`
+	Role     string `json:"role"`
 }
 
-// Временное хранилище для рефреш-токенов (в реальном приложении используйте БД)
+// Claims структура для хранения данных в JWT
+type Claims struct {
+	UserID    int    `json:"user_id"`
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	ClientIP  string `json:"client_ip"`  // IP клиента
+	UserAgent string `json:"user_agent"` // User-Agent клиента
+	jwt.RegisteredClaims
+}
+
+// Временное хранилище пользователей
+var users = map[string]User{
+	"testuser": {
+		ID:       1,
+		Username: "testuser",
+		Password: "testpass",
+		Email:    "test@example.com",
+		Role:     "user",
+	},
+	"admin": {
+		ID:       2,
+		Username: "admin",
+		Password: "adminpass",
+		Email:    "admin@example.com",
+		Role:     "admin",
+	},
+}
+
+// Временное хранилище для рефреш-токенов
 var refreshTokens = make(map[string]time.Time)
 
 func main() {
 	// Регистрируем обработчики
-	// Регистрируем middleware для требуемых методов
 	http.Handle("/login", requirePOST(http.HandlerFunc(loginHandler)))
 	http.Handle("/logout", requirePOST(http.HandlerFunc(logoutHandler)))
 	http.Handle("/refresh", requirePOST(http.HandlerFunc(refreshHandler)))
 	http.Handle("/user/me", requireAuth(http.HandlerFunc(userHandler)))
 
-	// Запуск HTTP-сервера на порту 8080
-	port := ":8080"
-	log.Printf("🔄 Запуск HTTP-сервера на http://localhost%s", port)
-	err := http.ListenAndServe(port, nil)
-	if err != nil {
-		log.Fatalf("❌ Ошибка при запуске сервера: %v", err)
-	}
+	// Запускаем сервер
+	log.Println("🚀 Сервер запущен на http://localhost:8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 // Middleware для проверки метода запроса
@@ -57,7 +78,7 @@ func requirePOST(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// Middleware для проверки JWT токена
+// Middleware для проверки JWT токена и соответствия клиентских данных
 func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -78,31 +99,72 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		// Проверяем соответствие IP и User-Agent
+		currentIP := getClientIP(r)
+		currentUserAgent := r.UserAgent()
+
+		if claims.ClientIP != currentIP {
+			http.Error(w, "Несоответствие IP адреса", http.StatusUnauthorized)
+			return
+		}
+
+		if claims.UserAgent != currentUserAgent {
+			http.Error(w, "Несоответствие User-Agent", http.StatusUnauthorized)
+			return
+		}
+
 		next(w, r)
 	}
 }
 
+// Функция для получения реального IP клиента
+func getClientIP(r *http.Request) string {
+	// Пытаемся получить IP из заголовков (если за прокси)
+	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+		return ip
+	}
+	if ip := r.Header.Get("X-Real-IP"); ip != "" {
+		return ip
+	}
+	// Если заголовков нет, используем RemoteAddr
+	return strings.Split(r.RemoteAddr, ":")[0]
+}
+
 // Обработчик для /login
 func loginHandler(w http.ResponseWriter, r *http.Request) {
-	// В реальном приложении здесь должна быть проверка учетных данных
-	// Для примера используем фиксированные значения
-	var user User
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+	var creds struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
 		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
 		return
 	}
 
-	if user.Username != "testuser" || user.Password != "testpass" {
+	// Проверяем учетные данные
+	user, exists := users[creds.Username]
+	if !exists || user.Password != creds.Password {
 		http.Error(w, "Неверные учетные данные", http.StatusUnauthorized)
 		return
 	}
 
-	// Создаем access токен
+	// Получаем данные о клиенте
+	clientIP := getClientIP(r)
+	userAgent := r.UserAgent()
+
+	// Создаем access токен с данными о клиенте
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
-		Username: user.Username,
+		UserID:    user.ID,
+		Username:  user.Username,
+		Email:     user.Email,
+		Role:      user.Role,
+		ClientIP:  clientIP,
+		UserAgent: userAgent,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "go-jwt-server",
 		},
 	})
 
@@ -112,12 +174,14 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создаем refresh токен
+	// Создаем refresh токен (без данных о клиенте)
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
+		UserID:   user.ID,
 		Username: user.Username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "go-jwt-server",
 		},
 	})
 
@@ -135,6 +199,8 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"access_token":  accessTokenString,
 		"refresh_token": refreshTokenString,
+		"client_ip":     clientIP,
+		"user_agent":    userAgent,
 	})
 }
 
@@ -187,12 +253,22 @@ func refreshHandler(w http.ResponseWriter, r *http.Request) {
 	// Удаляем старый refresh токен
 	delete(refreshTokens, request.RefreshToken)
 
+	// Получаем текущие данные о клиенте
+	clientIP := getClientIP(r)
+	userAgent := r.UserAgent()
+
 	// Создаем новую пару токенов
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
-		Username: claims.Username,
+		UserID:    claims.UserID,
+		Username:  claims.Username,
+		Email:     claims.Email,
+		Role:      claims.Role,
+		ClientIP:  clientIP,
+		UserAgent: userAgent,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "go-jwt-server",
 		},
 	})
 
@@ -204,10 +280,12 @@ func refreshHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Создаем новый refresh токен
 	newRefreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
+		UserID:   claims.UserID,
 		Username: claims.Username,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "go-jwt-server",
 		},
 	})
 
@@ -225,6 +303,8 @@ func refreshHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"access_token":  accessTokenString,
 		"refresh_token": newRefreshTokenString,
+		"client_ip":     clientIP,
+		"user_agent":    userAgent,
 	})
 }
 
@@ -235,12 +315,28 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Извлекаем claims из контекста (в реальном приложении)
-	// Здесь для простоты просто возвращаем фиктивные данные
+	// Получаем claims из токена
+	authHeader := r.Header.Get("Authorization")
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	claims := &Claims{}
+
+	_, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+
+	if err != nil {
+		http.Error(w, "Неверный токен", http.StatusUnauthorized)
+		return
+	}
+
+	// Возвращаем данные пользователя из токена
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"username": "testuser",
-		"email":    "test@example.com",
-		"role":     "user",
+		"user_id":    claims.UserID,
+		"username":   claims.Username,
+		"email":      claims.Email,
+		"role":       claims.Role,
+		"client_ip":  claims.ClientIP,
+		"user_agent": claims.UserAgent,
 	})
 }

@@ -4,16 +4,15 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/burn1ngbear/jwt-auth-service/internal/auth/handler"
-	"github.com/burn1ngbear/jwt-auth-service/internal/auth/middleware"
+	"github.com/burn1ngbear/jwt-auth-service/internal/auth"
 )
 
 func main() {
 	// Register handlers
-	http.Handle("/login", middleware.RequirePOST(http.HandlerFunc(handler.LoginHandler)))
-	http.Handle("/logout", middleware.RequirePOST(http.HandlerFunc(handler.LogoutHandler)))
-	http.Handle("/refresh", middleware.RequirePOST(http.HandlerFunc(handler.RefreshHandler)))
-	http.Handle("/user/me", middleware.RequireAuth(http.HandlerFunc(handler.UserHandler)))
+	http.Handle("/login", auth.RequirePOST(http.HandlerFunc(auth.LoginHandler)))
+	http.Handle("/logout", auth.RequirePOST(http.HandlerFunc(auth.LogoutHandler)))
+	http.Handle("/refresh", auth.RequirePOST(http.HandlerFunc(auth.RefreshHandler)))
+	http.Handle("/user/me", auth.RequireAuth(http.HandlerFunc(auth.UserHandler)))
 
 	// Start the server
 

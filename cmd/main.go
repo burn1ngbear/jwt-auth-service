@@ -16,6 +16,7 @@ func main() {
 	http.Handle("/user/me", middleware.RequireAuth(http.HandlerFunc(handler.UserHandler)))
 
 	// Start the server
+
 	log.Println("🚀 Server started at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

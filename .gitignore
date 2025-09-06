@@ -31,3 +31,4 @@ go.work.sum
 # .idea/
 # .vscode/
 redisdata/dump.rdb
+jwt-auth-service/

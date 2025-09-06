@@ -17,8 +17,8 @@ type UserCredentials struct {
 	Password string `json:"password"`
 }
 
-// loginHandler обрабатывает запросы на вход в систему
-func loginHandler(w http.ResponseWriter, r *http.Request) {
+// LoginHandler обрабатывает запросы на вход в систему
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var creds UserCredentials
 
 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
@@ -58,8 +58,8 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// logoutHandler обрабатывает запросы на выход из системы
-func logoutHandler(w http.ResponseWriter, r *http.Request) {
+// LogoutHandler обрабатывает запросы на выход из системы
+func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		RefreshToken string `json:"refresh_token"`
 	}
@@ -75,8 +75,8 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("✅ Вы успешно вышли из системы"))
 }
 
-// refreshHandler обрабатывает запросы на обновление токенов
-func refreshHandler(w http.ResponseWriter, r *http.Request) {
+// RefreshHandler обрабатывает запросы на обновление токенов
+func RefreshHandler(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		RefreshToken string `json:"refresh_token"`
 	}
@@ -127,4 +127,25 @@ func refreshHandler(w http.ResponseWriter, r *http.Request) {
 		"client_ip":     clientIP,
 		"user_agent":    userAgent,
 	})
+}
+
+func UserHandler(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	tokenString := authHeader[len("Bearer "):]
+
+	claims, err := ValidateToken(tokenString)
+	if err != nil {
+		http.Error(w, "Неверный токен", http.StatusUnauthorized)
+		return
+	}
+
+	userInfo := map[string]interface{}{
+		"id":       claims.UserID,
+		"username": claims.Username,
+		"email":    claims.Email,
+		"role":     claims.Role,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(userInfo)
 }

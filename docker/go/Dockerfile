@@ -1,22 +1,22 @@
-FROM golang:1.21-alpine
+FROM golang:alpine AS builder
+
+WORKDIR /build
+
+COPY ./go.mod ./go.mod
+COPY ./go.sum ./go.sum
+
+RUN go mod download
+
+COPY ./cmd ./cmd
+COPY ./internal ./internal
+
+RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/main.go
+
+FROM scratch AS app
+
 
 WORKDIR /app
 
-# Установка зависимостей
-RUN apk add --no-cache git
+COPY --from=builder /build/main /app/main
 
-# Копируем файлы модулей и загружаем зависимости
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Копируем исходный код
-COPY . .
-
-# Собираем приложение
-RUN go build -o main .
-
-# Экспортируем порт
-EXPOSE 8080
-
-# Запускаем приложение
 CMD ["./main"]

@@ -51,17 +51,17 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"access_token":  accessToken,
-		"refresh_token": refreshToken,
-		"client_ip":     clientIP,
-		"user_agent":    userAgent,
+		"accessToken":  accessToken,
+		"refreshToken": refreshToken,
+		// "client_ip":     clientIP,
+		// "user_agent":    userAgent,
 	})
 }
 
 // LogoutHandler обрабатывает запросы на выход из системы
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		RefreshToken string `json:"refresh_token"`
+		RefreshToken string `json:"refreshToken"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -78,7 +78,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 // RefreshHandler обрабатывает запросы на обновление токенов
 func RefreshHandler(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		RefreshToken string `json:"refresh_token"`
+		RefreshToken string `json:"refreshToken"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -106,13 +106,16 @@ func RefreshHandler(w http.ResponseWriter, r *http.Request) {
 	clientIP := utils.GetClientIP(r)
 	userAgent := r.UserAgent()
 
-	accessToken, err := GenerateAccessToken(claims.UserID, claims.Username, claims.Email, claims.Role, clientIP, userAgent)
+	user, _ := user.GetUserByUsername(claims.Username)
+
+	accessToken, err := GenerateAccessToken(user.ID, user.Username, user.Email, user.Role, clientIP, userAgent)
+
 	if err != nil {
 		http.Error(w, "Ошибка создания токена", http.StatusInternalServerError)
 		return
 	}
 
-	newRefreshToken, err := GenerateRefreshToken(claims.UserID, claims.Username)
+	newRefreshToken, err := GenerateRefreshToken(user.ID, user.Username)
 	if err != nil {
 		http.Error(w, "Ошибка создания токена", http.StatusInternalServerError)
 		return
@@ -122,10 +125,8 @@ func RefreshHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"access_token":  accessToken,
-		"refresh_token": newRefreshToken,
-		"client_ip":     clientIP,
-		"user_agent":    userAgent,
+		"accessToken":  accessToken,
+		"refreshToken": newRefreshToken,
 	})
 }
 

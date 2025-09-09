@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -50,12 +51,71 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	refreshTokens[refreshToken] = time.Now().Add(24 * time.Hour)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"accessToken":  accessToken,
-		"refreshToken": refreshToken,
-		// "client_ip":     clientIP,
-		// "user_agent":    userAgent,
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	// w.Header().Set("Access-Control-Allow-Origin", "http://0.0.0.0:4444")
+
+	// Устанавливаем ДВА токена в ответ
+	// Первый токен - сессионный
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    fmt.Sprintf("sess_%d", time.Now().Unix()),
+		Path:     "/",
+		Expires:  time.Now().Add(24 * time.Hour),
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
 	})
+
+	// Второй токен - для аутентификации
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    fmt.Sprintf("auth_%d", time.Now().UnixNano()),
+		Path:     "/",
+		Expires:  time.Now().Add(7 * 24 * time.Hour), // 7 дней
+		HttpOnly: false,                              // Доступен через JavaScript
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	// Третий токен - дополнительный (опционально)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "csrf_token",
+		Value:    fmt.Sprintf("csrf_%x", time.Now().UnixNano()),
+		Path:     "/",
+		Expires:  time.Now().Add(2 * time.Hour), // 2 часа
+		HttpOnly: false,
+		Secure:   false,
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	// Возвращаем JSON ответ
+	w.Header().Set("Content-Type", "application/json")
+	response := fmt.Sprintf(`{
+		"status": "success",
+		"message": "Login successful. Two tokens set.",
+		"timestamp": "%s",
+		"cookies_received": {%s},
+		"cookies_set": ["session_token", "auth_token", "csrf_token"]
+		"accessToken": "%s",
+		"refreshToken": "%s"
+	}`, time.Now().Format(time.RFC3339), formatCookiesJSON(r), accessToken, refreshToken)
+
+	fmt.Println("Response:", response) // Логируем ответ сервера
+	w.Write([]byte(response))
+}
+
+// Вспомогательная функция для форматирования cookies в JSON
+func formatCookiesJSON(r *http.Request) string {
+	var result string
+	first := true
+	for _, cookie := range r.Cookies() {
+		if !first {
+			result += ","
+		}
+		result += fmt.Sprintf(`"%s": "%s"`, cookie.Name, cookie.Value)
+		first = false
+	}
+	return result
 }
 
 // LogoutHandler обрабатывает запросы на выход из системы

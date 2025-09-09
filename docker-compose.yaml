@@ -16,11 +16,13 @@ services:
       context: .
       dockerfile: docker/go/Dockerfile
     ports:
-      - "4444:8080"
+      - "127.0.0.1:4444:8080"
     # depends_on:
     #   - postgres
     environment:
       DB_HOST: postgres
+    volumes:
+      - ./static:/var/www/html
   
   # redis:
   #   image: redis:latest

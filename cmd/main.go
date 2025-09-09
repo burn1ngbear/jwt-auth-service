@@ -3,11 +3,22 @@ package main
 import (
 	"log"
 	"net/http"
+	"path/filepath"
 
 	"github.com/burn1ngbear/jwt-auth-service/internal/auth"
 )
 
+// docker-compose.yaml -> app -> volumes
+var fileFolder string = "/var/www/html"
+
 func main() {
+	// Обработчик для главной страницы
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Формируем абсолютный путь к файлу
+		indexPath := filepath.Join(fileFolder, "index.html")
+		http.ServeFile(w, r, indexPath) // Используем абсолютный путь
+	})
+
 	// Register handlers
 	http.Handle("/login", auth.RequirePOST(http.HandlerFunc(auth.LoginHandler)))
 	http.Handle("/logout", auth.RequirePOST(http.HandlerFunc(auth.LogoutHandler)))

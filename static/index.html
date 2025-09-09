@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Проверка Cookie с обходом CORS</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #1a2a6c 0%, #b21f1f 50%, #fdbb2d 100%);
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 900px;
+            padding: 30px;
+            margin-top: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 2.2rem;
+        }
+        h2 {
+            color: #3498db;
+            margin: 25px 0 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+        h3 {
+            color: #2c3e50;
+            margin: 20px 0 10px;
+        }
+        .server-info {
+            background: #e8f4fc;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            text-align: center;
+            font-weight: bold;
+        }
+        .cors-warning {
+            background: #ffeaa7;
+            border-left: 4px solid #fdcb6e;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 14px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 10px 0;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+        .btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .btn.loading {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        .btn.loading::after {
+            content: "";
+            margin-left: 10px;
+            width: 18px;
+            height: 18px;
+            border: 3px solid transparent;
+            border-top: 3px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        .btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 10px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+        }
+        pre {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .cookie-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        input, select {
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        .success {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .error {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .hidden {
+            display: none;
+        }
+        .response-info {
+            margin: 10px 0;
+        }
+        .cookie-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        .cookie-item:last-child {
+            border-bottom: none;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-success {
+            background: #27ae60;
+        }
+        .status-error {
+            background: #e74c3c;
+        }
+        .method-description {
+            background: #edf2f7;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        footer {
+            margin-top: 30px;
+            text-align: center;
+            color: white;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            .cookie-controls, .btn-group {
+                grid-template-columns: 1fr;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Проверка передачи Cookie с обходом CORS</h1>
+        
+        <div class="server-info">
+            Сервер: 127.0.0.1:4444
+        </div>
+        
+        <div class="cors-warning">
+            <h3>Внимание: проблема CORS</h3>
+            <p>Сервер не отправляет заголовок 'Access-Control-Allow-Origin'. Выберите один из методов обхода:</p>
+        </div>
+        
+        <div class="section">
+            <h2>Текущие Cookie</h2>
+            <pre id="currentCookies">Загрузка...</pre>
+        </div>
+        
+        <div class="section">
+            <h2>Управление тестовыми Cookie</h2>
+            <div class="cookie-controls">
+                <input type="text" id="cookieName" placeholder="Имя Cookie (например: session_id)">
+                <input type="text" id="cookieValue" placeholder="Значение Cookie (например: abc123)">
+            </div>
+            <button class="btn" onclick="setCookie()">Установить Cookie</button>
+            <button class="btn" onclick="clearAllCookies()">Очистить все Cookie</button>
+        </div>
+        
+        <div class="section">
+            <h2>Методы проверки запроса</h2>
+            
+            <div class="method-description">
+                <h3>Метод 1: JSONP (для GET-запросов)</h3>
+                <p>Работает для серверов, поддерживающих JSONP. Нужно указать имя callback-функции.</p>
+            </div>
+            <div class="cookie-controls">
+                <input type="text" id="jsonpCallback" placeholder="Имя callback (например: handleResponse)" value="handleResponse">
+            </div>
+            <button class="btn" onclick="jsonpRequest()">JSONP запрос на /login</button>
+            
+            <div class="method-description">
+                <h3>Метод 2: Proxy через CORS-прокси</h3>
+                <p>Используем публичный CORS-прокси для обхода ограничений.</p>
+            </div>
+            <select id="proxySelect">
+                <option value="https://cors-anywhere.herokuapp.com/">CORS Anywhere (Heroku)</option>
+                <option value="https://api.codetabs.com/v1/proxy?quest=">CodeTabs Proxy</option>
+                <option value="https://corsproxy.io/?">CORS Proxy.io</option>
+            </select>
+            <button class="btn" onclick="proxyRequest()">Запрос через CORS-прокси</button>
+            
+            <div class="method-description">
+                <h3>Метод 3: Использование mode 'no-cors' (ограниченный)</h3>
+                <p>Отправляет запрос, но не позволяет читать ответ. Полезен для проверки отправки Cookie.</p>
+            </div>
+            <button class="btn" onclick="noCorsRequest()">Запрос с mode 'no-cors'</button>
+        </div>
+        
+        <div class="section">
+            <h2>Результаты проверки</h2>
+            <div id="resultSection" class="hidden">
+                <div class="response-info">
+                    Метод: <span id="method"></span>
+                </div>
+                <div class="response-info">
+                    <span id="status"></span>
+                </div>
+                <div class="response-info">
+                    Отправленные Cookie: <span id="sentCookies"></span>
+                </div>
+                <h3>Ответ сервера:</h3>
+                <pre id="response"></pre>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>Тестовый одностраничник для проверки передачи Cookie с обходом CORS</p>
+    </footer>
+
+    <script>
+        // Функция для обновления отображения текущих Cookie
+        function updateCookiesDisplay() {
+            const cookies = document.cookie;
+            if (!cookies) {
+                document.getElementById('currentCookies').textContent = 'Cookie отсутствуют';
+                return;
+            }
+            
+            const cookiesArray = cookies.split(';');
+            let cookiesHTML = '';
+            
+            cookiesArray.forEach(cookie => {
+                const [name, value] = cookie.trim().split('=');
+                cookiesHTML += `<div class="cookie-item"><span>${name}</span><span>${value}</span></div>`;
+            });
+            
+            document.getElementById('currentCookies').innerHTML = cookiesHTML;
+        }
+        
+        // Функция для установки Cookie
+        function setCookie() {
+            const name = document.getElementById('cookieName').value;
+            const value = document.getElementById('cookieValue').value;
+            
+            if (!name || !value) {
+                alert('Введите имя и значение cookie');
+                return;
+            }
+            
+            // Устанавливаем cookie на 1 день
+            const date = new Date();
+            date.setTime(date.getTime() + (24 * 60 * 60 * 1000));
+            const expires = "expires=" + date.toUTCString();
+            
+            document.cookie = `${name}=${value};${expires};path=/`;
+            updateCookiesDisplay();
+            
+            // Очищаем поля ввода
+            document.getElementById('cookieName').value = '';
+            document.getElementById('cookieValue').value = '';
+            
+            alert(`Cookie "${name}" установлен!`);
+        }
+        
+        // Функция для очистки всех Cookie
+        function clearAllCookies() {
+            if (!confirm('Вы уверены, что хотите удалить все cookie?')) return;
+            
+            const cookies = document.cookie.split(";");
+            
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i];
+                const eqPos = cookie.indexOf("=");
+                const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+                document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+            }
+            
+            updateCookiesDisplay();
+            alert('Все cookie были удалены!');
+        }
+        
+        // Функция для отображения результатов
+        function showResult(method, status, response, success = false) {
+            const resultSection = document.getElementById('resultSection');
+            const methodElement = document.getElementById('method');
+            const statusElement = document.getElementById('status');
+            const sentCookiesElement = document.getElementById('sentCookies');
+            const responseElement = document.getElementById('response');
+            
+            methodElement.textContent = method;
+            
+            const statusText = success ? 
+                '<span class="status-indicator status-success"></span> Успешно! Запрос выполнен.' :
+                `<span class="status-indicator status-error"></span> ${status}`;
+            
+            statusElement.innerHTML = statusText;
+            sentCookiesElement.textContent = document.cookie || 'Не отправлялись';
+            responseElement.textContent = response;
+            
+            resultSection.classList.remove('hidden');
+        }
+        
+        // Метод 1: JSONP запрос
+        function jsonpRequest() {
+            const callbackName = document.getElementById('jsonpCallback').value || 'handleResponse';
+            
+            // Создаем функцию для обработки ответа
+            window[callbackName] = function(data) {
+                showResult('JSONP', 'Успешно получен ответ', JSON.stringify(data, null, 2), true);
+                delete window[callbackName];
+                document.body.removeChild(script);
+            };
+            
+            // Создаем тег script для JSONP
+            const script = document.createElement('script');
+            script.src = `http://127.0.0.1:8080/login?callback=${callbackName}`;
+            
+            // Обработка ошибок
+            script.onerror = function() {
+                showResult('JSONP', 'Ошибка: Сервер не поддерживает JSONP или недоступен', '');
+                delete window[callbackName];
+                document.body.removeChild(script);
+            };
+            
+            document.body.appendChild(script);
+            showResult('JSONP', 'Отправка JSONP запроса...', 'Ожидание ответа...');
+        }
+        
+        // Метод 2: Запрос через CORS-прокси
+        async function proxyRequest() {
+            const proxyUrl = document.getElementById('proxySelect').value;
+            const targetUrl = 'http://127.0.0.1:4444/login';
+            
+            try {
+                const response = await fetch(proxyUrl + targetUrl, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username: 'testuser', password: 'testpass' }),
+                });
+                
+                const text = await response.text();
+                showResult('CORS-прокси', `Статус: ${response.status} ${response.statusText}`, text, response.ok);
+            } catch (error) {
+                showResult('CORS-прокси', `Ошибка: ${error.message}`, 'Попробуйте другой прокси-сервер');
+            }
+        }
+        
+        // Метод 3: Запрос с mode 'no-cors'
+        async function noCorsRequest() {
+            try {
+                const response = await fetch('http://127.0.0.1:8080/login', {
+                    method: 'POST',
+                    credentials: 'include',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username: 'testuser', password: 'testpass' }),
+                });
+                
+                // В режиме no-cors мы не можем прочитать ответ, но можем проверить отправку cookie
+                showResult('no-cors', 'Запрос отправлен (ответ недоступен из-за CORS)', 
+                          'Cookie должны были отправиться. Проверьте серверные логи.', true);
+            } catch (error) {
+                showResult('no-cors', `Ошибка: ${error.message}`, '');
+            }
+        }
+        
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCookiesDisplay();
+        });
+    </script>
+</body>
+</html>

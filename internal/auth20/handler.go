@@ -16,6 +16,8 @@ func ExternalService(w http.ResponseWriter, r *http.Request) {
 
 	// нужно трекать что пользователь авторизуется.
 	uuidValue := uuid.New().String()
+	// Записать uuid и адрес в хранилище.
+
 	// Редирект на новый URL с кодом 301 (Moved Permanently)
 	redirectTo := utils.GetLinkToExternalService(uuidValue)
 	http.Redirect(w, r, redirectTo, http.StatusMovedPermanently)

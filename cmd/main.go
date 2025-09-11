@@ -25,6 +25,8 @@ func main() {
 	http.Handle("/refresh", auth.RequirePOST(http.HandlerFunc(auth.RefreshHandler)))
 	http.Handle("/user/me", auth.RequireAuth(http.HandlerFunc(auth.UserHandler)))
 
+	auth20.InitRedis()
+
 	http.Handle("/auth/external-service", http.HandlerFunc(auth20.ExternalService))
 	http.Handle("/auth/returnTo/", http.HandlerFunc(auth20.ReturnTo))
 

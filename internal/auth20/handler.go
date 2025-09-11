@@ -1,45 +1,61 @@
 package auth20
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/burn1ngbear/jwt-auth-service/internal/utils"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 // Записывает запрос на авторизацию в кеш для индетификации callback запроса и редиректит на сторонний сервис авторизации.
 func ExternalService(w http.ResponseWriter, r *http.Request) {
-	// Мы должны получить адрес на который должны вернуть пользователя
-	// 		после автризации через сторонний сервис в func ReturnTo.
+	// Получение обратной ссылки для будущего возврата, после аутентификации.
+	returnToURL := r.URL.Query().Get("returnTo")
+	if returnToURL == "" {
+		http.Error(w, "Parametr returnTo required", http.StatusBadRequest)
+		return
+	}
 
 	// нужно трекать что пользователь авторизуется.
 	uuidValue := uuid.New().String()
-	// Записать uuid и адрес в хранилище.
 
-	// Редирект на новый URL с кодом 301 (Moved Permanently)
+	// Сохранение в Redis с TTL 10 минут
+	err := RedisClient.Set(ctx, uuidValue, returnToURL, 10*time.Minute).Err()
+	if err != nil {
+		http.Error(w, "Ошибка сервера", http.StatusInternalServerError)
+		return
+	}
+
+	// Редирект на сервис аутентификации.
 	redirectTo := utils.GetLinkToExternalService(uuidValue)
-	http.Redirect(w, r, redirectTo, http.StatusMovedPermanently)
+	http.Redirect(w, r, redirectTo, http.StatusFound)
 }
 
 func ReturnTo(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем UUID из пути
 	uuidValue := strings.TrimPrefix(r.URL.Path, "/auth/returnTo/")
-
 	if uuidValue == "" {
 		http.Error(w, "UUID required", http.StatusBadRequest)
 		return
 	}
 
-	// Теперь у вас есть uuidValue для использования
-	fmt.Printf("UUID: %s\n", uuidValue)
+	// Извлечение адреса возврата из Redis
+	returnToURL, err := RedisClient.Get(ctx, uuidValue).Result()
+	if err == redis.Nil {
+		// TODO: редирект на base_domain
+		http.Error(w, "Сессия не найдена или истекла", http.StatusBadRequest)
+		return
+	} else if err != nil {
+		// TODO: редирект на base_domain
+		http.Error(w, "Ошибка сервера", http.StatusInternalServerError)
+		return
+	}
 
-	// TODO:
-	//  - Проверка что в хварилище есть UUID
-	//  - Делаем запрос на сторонний сервис авторзации для подтверждения данных
-	// 		из-за того что callback может приходить с разных адресов
-	//		а адрес хранилища данных один.
-	//  - Создаём сущность (если не было) по полученным данным, записываем в COOKIE
-	// 		запроса accessToken refreshToken и редиректим на разранее подготовленную страницу.
+	// Удаление UUID из Redis после использования (опционально)
+	RedisClient.Del(ctx, uuidValue)
+
+	http.Redirect(w, r, returnToURL, http.StatusFound)
 }
